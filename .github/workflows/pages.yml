@@ -27,7 +27,8 @@ jobs:
         run: |
           cp -a _site/. ./
           touch .nojekyll
-          printf '%s\\n' '_site/' > .gitignore
+          echo '_site/' > .gitignore
+          git rm -r -q --cached _site 2>/dev/null || true
           git add -A
           if ! git diff --cached --quiet; then
             git config user.name "github-actions[bot]"
