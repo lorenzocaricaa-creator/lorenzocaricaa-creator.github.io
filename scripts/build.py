@@ -20,8 +20,9 @@ def fetch(path):
 
 
 def write_asset(path):
-    data = fetch("/" + path)
-    target = OUT / path
+    relative_path = path.removeprefix("base/")
+    data = fetch("/" + relative_path)
+    target = OUT / relative_path
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(data)
 
