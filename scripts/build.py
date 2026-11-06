@@ -28,9 +28,9 @@ def write_asset(path):
 
 def copy_photo(path):
     data = fetch(path)
-    if data.startswith(b"\\xff\\xd8\\xff"):
+    if data.startswith(b"\xff\xd8\xff"):
         ext = ".jpg"
-    elif data.startswith(b"\\x89PNG"):
+    elif data.startswith(b"\x89PNG"):
         ext = ".png"
     elif data[8:12] == b"WEBP":
         ext = ".webp"
@@ -43,7 +43,7 @@ def copy_photo(path):
     target = OUT / (path.lstrip("/") + ext)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(data)
-    return path, "/" + str(target.relative_to(OUT)).replace("\\\\", "/")
+    return path, "/" + str(target.relative_to(OUT)).replace("\\", "/")
 
 
 OUT.mkdir(exist_ok=True)
@@ -52,7 +52,7 @@ data = re.search(r'<script[^>]*id="portfolio-data"[^>]*>(.*?)</script>', html, r
 if not data or not json.loads(data.group(1)):
     raise ValueError("The source website returned no portfolio data; keeping previous deployment.")
 
-paths = sorted(set(re.findall(r"/media/[\\w-]+", html)))
+paths = sorted(set(re.findall(r"/media/[\w-]+", html)))
 with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
     list(pool.map(write_asset, ASSETS))
     for before, after in pool.map(copy_photo, paths):
