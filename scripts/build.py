@@ -62,3 +62,56 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
 html = html.replace('href="/admin"', f'href="{ORIGIN}/admin"')
 (OUT / "index.html").write_text(html, encoding="utf-8")
 print(f"Exported website: {len(ASSETS)} static files, {len(paths)} editor photos")
+
+
+# Export the English edition into its own URL path.
+EN_ORIGIN = "https://lorenzo-meroni-portfolio-en.lorenzocaricaa.chatgpt.site"
+EN_PREFIX = "/portfolio-en"
+EN_OUT = OUT / "portfolio-en"
+
+
+def fetch_english(path):
+    return subprocess.check_output(
+        ["curl", "-fLsS", "--retry", "4", "--max-time", "120", EN_ORIGIN + path],
+        timeout=140,
+    )
+
+
+def copy_english(path):
+    content = fetch_english(path)
+    target_path = path
+    if path.startswith("/media/"):
+        if content.startswith(b"\xff\xd8\xff"):
+            target_path += ".jpg"
+        elif content.startswith(b"\x89PNG"):
+            target_path += ".png"
+        elif content[8:12] == b"WEBP":
+            target_path += ".webp"
+        elif content[4:12] in (b"ftypavif", b"ftypavis"):
+            target_path += ".avif"
+        else:
+            raise ValueError("Unknown English media format: " + path)
+    if path.endswith((".js", ".mjs", ".css")):
+        content = content.decode("utf-8").replace("/assets/", EN_PREFIX + "/assets/").encode("utf-8")
+    target = EN_OUT / target_path.lstrip("/")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(content)
+    return path, EN_PREFIX + target_path
+
+
+english_html = fetch_english("/").decode("utf-8")
+english_data = re.search(r'<script[^>]*id="portfolio-data"[^>]*>(.*?)</script>', english_html, re.S)
+if not english_data or not json.loads(english_data.group(1)).get("content"):
+    raise ValueError("English portfolio content is missing")
+english_paths = {"/" + path.removeprefix("base/") for path in ASSETS}
+english_paths.update(re.findall(r"/assets/[a-zA-Z0-9_.-]+", english_html))
+english_paths.update(re.findall(r"/media/[a-zA-Z0-9-]+", english_html))
+EN_OUT.mkdir(parents=True, exist_ok=True)
+with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+    replacements = dict(pool.map(copy_english, sorted(english_paths)))
+# Replace complete paths once, avoiding double prefixes.
+pattern = re.compile("|".join(re.escape(path) for path in sorted(replacements, key=len, reverse=True)))
+english_html = pattern.sub(lambda match: replacements[match.group(0)], english_html)
+english_html = english_html.replace('href="/admin"', f'href="{EN_ORIGIN}/admin"')
+(EN_OUT / "index.html").write_text(english_html, encoding="utf-8")
+print(f"Exported English portfolio to {EN_PREFIX}/ with {len(english_paths)} assets")
